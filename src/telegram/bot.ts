@@ -222,7 +222,9 @@ export function createTelegramBot(opts: TelegramBotOptions) {
         rawUpdateLogger.debug(`telegram update log failed: ${String(err)}`);
       }
     }
+    rawUpdateLogger.debug("telegram middleware: calling next()");
     await next();
+    rawUpdateLogger.debug("telegram middleware: next() returned");
     recordUpdateId(ctx);
   });
 

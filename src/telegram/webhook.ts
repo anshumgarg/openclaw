@@ -54,6 +54,7 @@ export async function startTelegramWebhook(opts: {
     proxyFetch: opts.fetch,
     config: opts.config,
     accountId: opts.accountId,
+    skipLastUpdateIdCheck: true,
   });
   const handler = webhookCallback(bot, "http", {
     secretToken: secret,

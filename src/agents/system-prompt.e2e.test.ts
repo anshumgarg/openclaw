@@ -143,6 +143,29 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("sessions_send");
   });
 
+  it("includes current session key in Messaging section when sessions_send is available", () => {
+    const sessionKey = "agent:main:telegram:direct:6176528065";
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["sessions_send", "message"],
+      runtimeInfo: { sessionKey },
+    });
+
+    expect(prompt).toContain("## Messaging");
+    expect(prompt).toContain(`Current session key (for sessions_send): \`${sessionKey}\``);
+    expect(prompt).toContain("to reply in this conversation");
+  });
+
+  it("omits session key hint when sessions_send is not available", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["message"],
+      runtimeInfo: { sessionKey: "agent:main:telegram:direct:123" },
+    });
+
+    expect(prompt).not.toContain("Current session key (for sessions_send):");
+  });
+
   it("preserves tool casing in the prompt", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
@@ -429,6 +452,7 @@ describe("buildAgentSystemPrompt", () => {
     const line = buildRuntimeLine(
       {
         agentId: "work",
+        sessionKey: "agent:main:telegram:direct:6176528065",
         host: "host",
         repoRoot: "/repo",
         os: "macOS",
@@ -443,6 +467,7 @@ describe("buildAgentSystemPrompt", () => {
     );
 
     expect(line).toContain("agent=work");
+    expect(line).toContain("sessionKey=agent:main:telegram:direct:6176528065");
     expect(line).toContain("host=host");
     expect(line).toContain("repo=/repo");
     expect(line).toContain("os=macOS (arm64)");

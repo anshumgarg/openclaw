@@ -458,6 +458,7 @@ export async function compactEmbeddedPiSessionDirect(
       channel: runtimeChannel,
       capabilities: runtimeCapabilities,
       channelActions,
+      sessionKey: params.sessionKey,
     };
     const sandboxInfo = buildEmbeddedSandboxInfo(sandbox, params.bashElevated);
     const reasoningTagHint = isReasoningTagProvider(provider);

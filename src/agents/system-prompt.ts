@@ -103,38 +103,63 @@ function buildMessagingSection(params: {
   inlineButtonsEnabled: boolean;
   runtimeChannel?: string;
   messageToolHints?: string[];
+  /** Current session key; shown when sessions_send is available so agent uses it correctly */
+  sessionKey?: string;
 }) {
   if (params.isMinimal) {
     return [];
   }
-  return [
-    "## Messaging",
-    "- Reply in current session → automatically routes to the source channel (Signal, Telegram, etc.)",
-    "- Cross-session messaging → use sessions_send(sessionKey, message)",
-    "- Sub-agent orchestration → use subagents(action=list|steer|kill)",
-    "- `[System Message] ...` blocks are internal context and are not user-visible by default.",
-    `- If a \`[System Message]\` reports completed cron/subagent work and asks for a user update, rewrite it in your normal assistant voice and send that update (do not forward raw system text or default to ${SILENT_REPLY_TOKEN}).`,
-    "- Never use exec/curl for provider messaging; OpenClaw handles all routing internally.",
-    params.availableTools.has("message")
-      ? [
-          "",
-          "### message tool",
-          "- Use `message` for proactive sends + channel actions (polls, reactions, etc.).",
-          "- For `action=send`, include `to` and `message`.",
-          `- If multiple channels are configured, pass \`channel\` (${params.messageChannelOptions}).`,
-          `- If you use \`message\` (\`action=send\`) to deliver your user-visible reply, respond with ONLY: ${SILENT_REPLY_TOKEN} (avoid duplicate replies).`,
-          params.inlineButtonsEnabled
-            ? "- Inline buttons supported. Use `action=send` with `buttons=[[{text,callback_data,style?}]]`; `style` can be `primary`, `success`, or `danger`."
-            : params.runtimeChannel
-              ? `- Inline buttons not enabled for ${params.runtimeChannel}. If you need them, ask to set ${params.runtimeChannel}.capabilities.inlineButtons ("dm"|"group"|"all"|"allowlist").`
-              : "",
-          ...(params.messageToolHints ?? []),
-        ]
+  const hasSessionsSend = params.availableTools.has("sessions_send");
+  const hasMessage = params.availableTools.has("message");
+  const sessionKey = params.sessionKey?.trim();
+  const sessionKeyAvailable = Boolean(sessionKey && hasSessionsSend);
+
+  const sessionKeyLine = sessionKeyAvailable
+    ? `- Current session key (for sessions_send): \`${sessionKey}\`\n  - Use this exact sessionKey when calling \`sessions_send\` to reply in this conversation.`
+    : null;
+
+  const sessionsSendBlock = hasSessionsSend
+    ? [
+        "- Default rule (replying to the user who just messaged): ALWAYS use `sessions_send` with the CURRENT sessionKey.",
+        sessionKeyLine,
+        "- Cross-session messaging: use `sessions_send(sessionKey, message)` with the target sessionKey.",
+        "",
+      ].filter(Boolean)
+    : [];
+
+  const messageBlock = hasMessage
+    ? [
+        "- DO NOT use `message` to reply to the current conversation (it requires an explicit target and is easy to misroute).",
+        "- Use `message` ONLY for proactive sends / channel actions when you explicitly know the destination:",
+        "  - For `action=send`, include `to` and `message` (and `channel` if needed).",
+        "  - If `to` is unknown or not provided, do not call `message`.",
+        "",
+        "### message tool",
+        "- Use `message` for proactive sends + channel actions (polls, reactions, etc.).",
+        `- If multiple channels are configured, pass \`channel\` (${params.messageChannelOptions}).`,
+        params.inlineButtonsEnabled
+          ? "- Inline buttons supported. Use `action=send` with `buttons=[[{text,callback_data,style?}]]`; `style` can be `primary`, `success`, or `danger`."
+          : params.runtimeChannel
+            ? `- Inline buttons not enabled for ${params.runtimeChannel}. If you need them, ask to set ${params.runtimeChannel}.capabilities.inlineButtons ("dm"|"group"|"all"|"allowlist").`
+            : "",
+        ...(params.messageToolHints ?? []),
+      ]
           .filter(Boolean)
           .join("\n")
-      : "",
+    : "";
+
+  return [
+    "## Messaging",
+    ...sessionsSendBlock,
+    messageBlock,
+    "- Sub-agent orchestration → use `subagents(action=list|steer|kill)`",
+    "  - Subagents must not send user replies unless they are given an explicit target; route replies via the parent using `sessions_send`.",
     "",
-  ];
+    "- `[System Message] ...` blocks are internal context and not user-visible.",
+    `- If a \`[System Message]\` asks for a user update, rewrite it in normal assistant voice and send via \`sessions_send\` (not \`message\`).`,
+    "- Never use exec/curl for provider messaging; OpenClaw handles routing internally.",
+    "",
+  ].filter(Boolean);
 }
 
 function buildVoiceSection(params: { isMinimal: boolean; ttsHint?: string }) {
@@ -199,6 +224,8 @@ export function buildAgentSystemPrompt(params: {
     channel?: string;
     capabilities?: string[];
     repoRoot?: string;
+    /** Current session key; use for sessions_send when targeting this session */
+    sessionKey?: string;
   };
   messageToolHints?: string[];
   sandboxInfo?: {
@@ -539,6 +566,7 @@ export function buildAgentSystemPrompt(params: {
       inlineButtonsEnabled,
       runtimeChannel,
       messageToolHints: params.messageToolHints,
+      sessionKey: runtimeInfo?.sessionKey,
     }),
     ...buildVoiceSection({ isMinimal, ttsHint: params.ttsHint }),
   ];
@@ -649,6 +677,7 @@ export function buildRuntimeLine(
     defaultModel?: string;
     shell?: string;
     repoRoot?: string;
+    sessionKey?: string;
   },
   runtimeChannel?: string,
   runtimeCapabilities: string[] = [],
@@ -656,6 +685,7 @@ export function buildRuntimeLine(
 ): string {
   return `Runtime: ${[
     runtimeInfo?.agentId ? `agent=${runtimeInfo.agentId}` : "",
+    runtimeInfo?.sessionKey ? `sessionKey=${runtimeInfo.sessionKey}` : "",
     runtimeInfo?.host ? `host=${runtimeInfo.host}` : "",
     runtimeInfo?.repoRoot ? `repo=${runtimeInfo.repoRoot}` : "",
     runtimeInfo?.os

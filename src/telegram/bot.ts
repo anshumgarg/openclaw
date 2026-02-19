@@ -56,6 +56,8 @@ export type TelegramBotOptions = {
     lastUpdateId?: number | null;
     onUpdateId?: (updateId: number) => void | Promise<void>;
   };
+  /** When true, skip the lastUpdateId (stale) check. Use for webhook mode where updates can arrive out of order. */
+  skipLastUpdateIdCheck?: boolean;
   testTimings?: {
     mediaGroupFlushMs?: number;
     textFragmentGapMs?: number;
@@ -173,13 +175,16 @@ export function createTelegramBot(opts: TelegramBotOptions) {
   const shouldSkipUpdate = (ctx: TelegramUpdateKeyContext) => {
     const updateId = resolveTelegramUpdateId(ctx);
     const key = buildTelegramUpdateKey(ctx);
-    if (typeof updateId === "number" && lastUpdateId !== null) {
-      if (updateId <= lastUpdateId) {
-        rawUpdateLogger.debug(
-          `shouldSkipUpdate: skip (stale) updateId=${updateId} lastUpdateId=${lastUpdateId} key=${key ?? "n/a"}`,
-        );
-        return true;
-      }
+    if (
+      !opts.skipLastUpdateIdCheck &&
+      typeof updateId === "number" &&
+      lastUpdateId !== null &&
+      updateId <= lastUpdateId
+    ) {
+      rawUpdateLogger.debug(
+        `shouldSkipUpdate: skip (stale) updateId=${updateId} lastUpdateId=${lastUpdateId} key=${key ?? "n/a"}`,
+      );
+      return true;
     }
     const skipped = recentUpdates.check(key);
     if (skipped && key && shouldLogVerbose()) {

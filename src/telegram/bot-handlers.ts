@@ -16,6 +16,7 @@ import { writeConfigFile } from "../config/io.js";
 import { loadSessionStore, resolveStorePath } from "../config/sessions.js";
 import type { TelegramGroupConfig, TelegramTopicConfig } from "../config/types.js";
 import { danger, logVerbose, warn } from "../globals.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
 import { readChannelAllowFromStore } from "../pairing/pairing-store.js";
 import { resolveAgentRoute } from "../routing/resolve-route.js";
@@ -147,11 +148,14 @@ export const registerTelegramHandlers = ({
       return !hasControlCommand(text, cfg, { botUsername: entry.botUsername });
     },
     onFlush: async (entries) => {
+      const diagLog = createSubsystemLogger("gateway/channels/telegram/inbound");
+      diagLog.debug(`debouncer flush: ${entries.length} entries`);
       const last = entries.at(-1);
       if (!last) {
         return;
       }
       if (entries.length === 1) {
+        diagLog.debug("calling processMessage");
         await processMessage(last.ctx, last.allMedia, last.storeAllowFrom);
         return;
       }
@@ -178,6 +182,9 @@ export const registerTelegramHandlers = ({
       );
     },
     onError: (err) => {
+      createSubsystemLogger("gateway/channels/telegram/inbound").error(
+        `debouncer onFlush error: ${String(err)}`,
+      );
       runtime.error?.(danger(`telegram debounce flush failed: ${String(err)}`));
     },
   });
@@ -534,6 +541,10 @@ export const registerTelegramHandlers = ({
     sendOversizeWarning: boolean;
     oversizeLogMessage: string;
   }) => {
+    const processDiagLog = createSubsystemLogger("gateway/channels/telegram/inbound");
+    processDiagLog.debug(
+      `processInboundMessage start chatId=${params.chatId} text=${(params.msg.text ?? params.msg.caption ?? "").slice(0, 50)}`,
+    );
     const {
       ctx,
       msg,
@@ -686,6 +697,7 @@ export const registerTelegramHandlers = ({
     const debounceKey = senderId
       ? `telegram:${accountId ?? "default"}:${conversationKey}:${senderId}`
       : null;
+    processDiagLog.debug(`enqueue debounceKey=${debounceKey ?? "null"}`);
     await inboundDebouncer.enqueue({
       ctx,
       msg,
@@ -1109,6 +1121,9 @@ export const registerTelegramHandlers = ({
         oversizeLogMessage: event.oversizeLogMessage,
       });
     } catch (err) {
+      createSubsystemLogger("gateway/channels/telegram/inbound").error(
+        `handleInboundMessageLike error: ${event.errorMessage}: ${String(err)}`,
+      );
       runtime.error?.(danger(`${event.errorMessage}: ${String(err)}`));
     }
   };

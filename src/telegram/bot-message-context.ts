@@ -27,6 +27,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import { loadConfig } from "../config/config.js";
 import { readSessionUpdatedAt, resolveStorePath } from "../config/sessions.js";
 import type { DmPolicy, TelegramGroupConfig, TelegramTopicConfig } from "../config/types.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import { recordChannelActivity } from "../infra/channel-activity.js";
 import { buildPairingReply } from "../pairing/pairing-messages.js";
@@ -208,6 +209,14 @@ export const buildTelegramMessageContext = async ({
     requireSenderForAllowOverride: false,
   });
   if (!baseAccess.allowed) {
+    const diagLog = createSubsystemLogger("gateway/channels/telegram/inbound");
+    const reason =
+      baseAccess.reason === "group-disabled"
+        ? `group-disabled:${chatId}`
+        : baseAccess.reason === "topic-disabled"
+          ? `topic-disabled:${chatId}:${resolvedThreadId ?? "unknown"}`
+          : `group-allowFrom:${senderId || "unknown"}`;
+    diagLog.debug(`buildTelegramMessageContext null: baseAccess ${reason}`);
     if (baseAccess.reason === "group-disabled") {
       logVerbose(`Blocked telegram group ${chatId} (group disabled)`);
       return null;
@@ -258,7 +267,9 @@ export const buildTelegramMessageContext = async ({
 
   // DM access control (secure defaults): "pairing" (default) / "allowlist" / "open" / "disabled"
   if (!isGroup) {
+    const dmDiagLog = createSubsystemLogger("gateway/channels/telegram/inbound");
     if (dmPolicy === "disabled") {
+      dmDiagLog.debug("buildTelegramMessageContext null: dmPolicy disabled");
       return null;
     }
 
@@ -332,6 +343,9 @@ export const buildTelegramMessageContext = async ({
             `Blocked unauthorized telegram sender ${candidate} (dmPolicy=${dmPolicy}, ${allowMatchMeta})`,
           );
         }
+        dmDiagLog.debug(
+          `buildTelegramMessageContext null: dmPolicy=${dmPolicy} sender=${candidate} allowed=false`,
+        );
         return null;
       }
     }
@@ -447,6 +461,9 @@ export const buildTelegramMessageContext = async ({
   });
   const wasMentioned = options?.forceWasMentioned === true ? true : computedWasMentioned;
   if (isGroup && commandGate.shouldBlock) {
+    createSubsystemLogger("gateway/channels/telegram/inbound").debug(
+      "buildTelegramMessageContext null: control command unauthorized",
+    );
     logInboundDrop({
       log: logVerbose,
       channel: "telegram",
@@ -474,6 +491,9 @@ export const buildTelegramMessageContext = async ({
   const effectiveWasMentioned = mentionGate.effectiveWasMentioned;
   if (isGroup && requireMention && canDetectMention) {
     if (mentionGate.shouldSkip) {
+      createSubsystemLogger("gateway/channels/telegram/inbound").debug(
+        "buildTelegramMessageContext null: group requireMention no-mention",
+      );
       logger.info({ chatId, reason: "no-mention" }, "skipping group message");
       recordPendingHistoryEntryIfEnabled({
         historyMap: groupHistories,

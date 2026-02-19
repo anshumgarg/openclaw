@@ -1,4 +1,5 @@
 import type { ReplyToMode } from "../config/config.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import type { TelegramAccountConfig } from "../config/types.telegram.js";
 import type { RuntimeEnv } from "../runtime.js";
 import {
@@ -52,6 +53,8 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
     storeAllowFrom: string[],
     options?: { messageIdOverride?: string; forceWasMentioned?: boolean },
   ) => {
+    const diagLog = createSubsystemLogger("gateway/channels/telegram/inbound");
+    diagLog.debug("processMessage called");
     const context = await buildTelegramMessageContext({
       primaryCtx,
       allMedia,
@@ -72,6 +75,7 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
       resolveTelegramGroupConfig,
     });
     if (!context) {
+      diagLog.debug("buildTelegramMessageContext returned null (message dropped)");
       return;
     }
     await dispatchTelegramMessage({

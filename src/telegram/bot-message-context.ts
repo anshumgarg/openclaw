@@ -397,6 +397,9 @@ export const buildTelegramMessageContext = async ({
     rawBody = placeholder;
   }
   if (!rawBody && allMedia.length === 0) {
+    createSubsystemLogger("gateway/channels/telegram/raw-update").debug(
+      "buildTelegramMessageContext null: no rawBody and no media",
+    );
     return null;
   }
 

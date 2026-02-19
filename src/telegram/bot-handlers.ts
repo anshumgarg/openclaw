@@ -678,6 +678,9 @@ export const registerTelegramHandlers = ({
     // These have no media and no text content to process.
     const hasText = Boolean((msg.text ?? msg.caption ?? "").trim());
     if (msg.sticker && !media && !hasText) {
+      processDiagLog.debug(
+        "telegram: skipping sticker-only message (unsupported sticker type)",
+      );
       logVerbose("telegram: skipping sticker-only message (unsupported sticker type)");
       return;
     }
@@ -1076,6 +1079,9 @@ export const registerTelegramHandlers = ({
         handleDiagLog.debug("handleInboundMessageLike skip: shouldSkipUpdate");
         return;
       }
+      handleDiagLog.debug(
+        `handleInboundMessageLike proceeding chatId=${event.chatId} isGroup=${event.isGroup}`,
+      );
 
       const groupAllowContext = await resolveTelegramGroupAllowFromContext({
         chatId: event.chatId,
@@ -1128,6 +1134,9 @@ export const registerTelegramHandlers = ({
         sendOversizeWarning: event.sendOversizeWarning,
         oversizeLogMessage: event.oversizeLogMessage,
       });
+      handleDiagLog.debug(
+        `handleInboundMessageLike complete chatId=${event.chatId} isGroup=${event.isGroup}`,
+      );
     } catch (err) {
       createSubsystemLogger("gateway/channels/telegram/raw-update").error(
         `handleInboundMessageLike error: ${event.errorMessage}: ${String(err)}`,

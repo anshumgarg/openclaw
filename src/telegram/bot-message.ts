@@ -78,6 +78,7 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
       diagLog.debug("buildTelegramMessageContext returned null (message dropped)");
       return;
     }
+    diagLog.debug("processMessage dispatching to agent");
     await dispatchTelegramMessage({
       context,
       bot,
@@ -89,5 +90,6 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
       telegramCfg,
       opts,
     });
+    diagLog.debug("processMessage done");
   };
 };

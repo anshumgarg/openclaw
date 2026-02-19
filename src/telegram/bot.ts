@@ -172,15 +172,32 @@ export function createTelegramBot(opts: TelegramBotOptions) {
 
   const shouldSkipUpdate = (ctx: TelegramUpdateKeyContext) => {
     const updateId = resolveTelegramUpdateId(ctx);
+    const key = buildTelegramUpdateKey(ctx);
     if (typeof updateId === "number" && lastUpdateId !== null) {
       if (updateId <= lastUpdateId) {
+        rawUpdateLogger.debug(
+          `shouldSkipUpdate: skip (stale) updateId=${updateId} lastUpdateId=${lastUpdateId} key=${key ?? "n/a"}`,
+        );
         return true;
       }
     }
-    const key = buildTelegramUpdateKey(ctx);
     const skipped = recentUpdates.check(key);
     if (skipped && key && shouldLogVerbose()) {
       logVerbose(`telegram dedupe: skipped ${key}`);
+    }
+    // Workaround: grammY runner can deliver same update to multiple handlers; the first
+    // handler to call check() adds the key, causing our message handler to skip.
+    // Bypass recentUpdates for now so DMs get processed. lastUpdateId still prevents old updates.
+    if (skipped && ctx.update?.message?.chat?.type === "private") {
+      rawUpdateLogger.debug(`telegram dedupe bypass for DM update ${updateId} (key=${key})`);
+      return false;
+    }
+    if (skipped) {
+      rawUpdateLogger.debug(
+        `shouldSkipUpdate: skip (duplicate) updateId=${updateId} key=${key ?? "n/a"}`,
+      );
+    } else {
+      rawUpdateLogger.debug(`shouldSkipUpdate: process updateId=${updateId} key=${key ?? "n/a"}`);
     }
     return skipped;
   };

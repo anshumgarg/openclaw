@@ -148,7 +148,7 @@ export const registerTelegramHandlers = ({
       return !hasControlCommand(text, cfg, { botUsername: entry.botUsername });
     },
     onFlush: async (entries) => {
-      const diagLog = createSubsystemLogger("gateway/channels/telegram/inbound");
+      const diagLog = createSubsystemLogger("gateway/channels/telegram/raw-update");
       diagLog.debug(`debouncer flush: ${entries.length} entries`);
       const last = entries.at(-1);
       if (!last) {
@@ -182,7 +182,7 @@ export const registerTelegramHandlers = ({
       );
     },
     onError: (err) => {
-      createSubsystemLogger("gateway/channels/telegram/inbound").error(
+      createSubsystemLogger("gateway/channels/telegram/raw-update").error(
         `debouncer onFlush error: ${String(err)}`,
       );
       runtime.error?.(danger(`telegram debounce flush failed: ${String(err)}`));
@@ -541,7 +541,7 @@ export const registerTelegramHandlers = ({
     sendOversizeWarning: boolean;
     oversizeLogMessage: string;
   }) => {
-    const processDiagLog = createSubsystemLogger("gateway/channels/telegram/inbound");
+    const processDiagLog = createSubsystemLogger("gateway/channels/telegram/raw-update");
     processDiagLog.debug(
       `processInboundMessage start chatId=${params.chatId} text=${(params.msg.text ?? params.msg.caption ?? "").slice(0, 50)}`,
     );
@@ -1067,8 +1067,13 @@ export const registerTelegramHandlers = ({
   };
 
   const handleInboundMessageLike = async (event: InboundTelegramEvent) => {
+    const handleDiagLog = createSubsystemLogger("gateway/channels/telegram/raw-update");
+    handleDiagLog.debug(
+      `handleInboundMessageLike entry chatId=${event.chatId} isGroup=${event.isGroup}`,
+    );
     try {
       if (shouldSkipUpdate(event.ctxForDedupe)) {
+        handleDiagLog.debug("handleInboundMessageLike skip: shouldSkipUpdate");
         return;
       }
 
@@ -1090,6 +1095,7 @@ export const registerTelegramHandlers = ({
       } = groupAllowContext;
 
       if (event.requireConfiguredGroup && (!groupConfig || groupConfig.enabled === false)) {
+        handleDiagLog.debug("handleInboundMessageLike skip: requireConfiguredGroup channel disabled");
         logVerbose(`Blocked telegram channel ${event.chatId} (channel disabled)`);
         return;
       }
@@ -1108,9 +1114,11 @@ export const registerTelegramHandlers = ({
           topicConfig,
         })
       ) {
+        handleDiagLog.debug("handleInboundMessageLike skip: shouldSkipGroupMessage");
         return;
       }
 
+      handleDiagLog.debug("handleInboundMessageLike calling processInboundMessage");
       await processInboundMessage({
         ctx: event.ctx,
         msg: event.msg,
@@ -1121,7 +1129,7 @@ export const registerTelegramHandlers = ({
         oversizeLogMessage: event.oversizeLogMessage,
       });
     } catch (err) {
-      createSubsystemLogger("gateway/channels/telegram/inbound").error(
+      createSubsystemLogger("gateway/channels/telegram/raw-update").error(
         `handleInboundMessageLike error: ${event.errorMessage}: ${String(err)}`,
       );
       runtime.error?.(danger(`${event.errorMessage}: ${String(err)}`));

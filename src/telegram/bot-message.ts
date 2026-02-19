@@ -53,7 +53,7 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
     storeAllowFrom: string[],
     options?: { messageIdOverride?: string; forceWasMentioned?: boolean },
   ) => {
-    const diagLog = createSubsystemLogger("gateway/channels/telegram/inbound");
+    const diagLog = createSubsystemLogger("gateway/channels/telegram/raw-update");
     diagLog.debug("processMessage called");
     const context = await buildTelegramMessageContext({
       primaryCtx,
